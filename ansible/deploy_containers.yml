@@ -1,0 +1,65 @@
+---
+- name: Deploy portfolio container to all nodes
+  hosts: all
+  become: true
+  tasks:
+    - name: Install Docker (Ubuntu)
+      apt:
+        name: [docker.io, python3-docker]
+        state: present
+        update_cache: yes
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: Install dnf-plugins-core (CentOS)
+      dnf:
+        name: dnf-plugins-core
+        state: present
+      when: ansible_facts['os_family'] == "RedHat"
+
+    - name: Add Docker CE repository (CentOS)
+      command: dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+      args:
+        creates: /etc/yum.repos.d/docker-ce.repo
+      when: ansible_facts['os_family'] == "RedHat"
+
+    - name: Install Docker CE (CentOS)
+      dnf:
+        name: [docker-ce, docker-ce-cli, containerd.io, python3-docker]
+        state: present
+      when: ansible_facts['os_family'] == "RedHat"
+
+    - name: Start and enable Docker
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Save the image on the control node
+      community.docker.docker_image:
+        name: malaga-portfolio
+        tag: latest
+        source: local
+        archive_path: /tmp/malaga-portfolio.tar
+      delegate_to: localhost
+      run_once: true
+
+    - name: Copy the image archive to the remote host
+      copy:
+        src: /tmp/malaga-portfolio.tar
+        dest: /tmp/malaga-portfolio.tar
+
+    - name: Load the image on the remote host
+      community.docker.docker_image:
+        name: malaga-portfolio
+        tag: latest
+        load_path: /tmp/malaga-portfolio.tar
+        source: load
+
+    - name: Run the portfolio container
+      community.docker.docker_container:
+        name: malaga-portfolio
+        image: malaga-portfolio:latest
+        state: started
+        restart_policy: always
+        ports:
+          - "8080:80"

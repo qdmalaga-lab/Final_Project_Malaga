@@ -1,0 +1,29 @@
+---
+- name: Build portfolio Docker image
+  hosts: localhost
+  connection: local
+  become: true
+  tasks:
+    - name: Ensure Docker is installed
+      apt:
+        name:
+          - docker.io
+          - python3-docker
+        state: present
+        update_cache: yes
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: Start and enable Docker
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Build the portfolio image
+      community.docker.docker_image:
+        name: malaga-portfolio
+        tag: latest
+        source: build
+        build:
+          path: "{{ playbook_dir }}/.."
+        force_source: true
